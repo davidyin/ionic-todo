@@ -1,16 +1,16 @@
-/*
-Copyright 2013 Drifty Co.
-http://drifty.com/
+/**
+ * Copyright 2013 Drifty Co.
+ * http://drifty.com/
 
-Ionic - an amazing HTML5 mobile app framework.
-http://ionicframework.com/
-
-By @maxlynch, @helloimben, @adamdbradley <3
-
-Licensed under the MIT license. Please see LICENSE for more information.
-
-Make awesome shit.
-*/
+ * Ionic - a powerful HTML5 mobile app framework.
+ * http://ionicframework.com/
+ *
+ *
+ * By @maxlynch, @helloimben, @adamdbradley <3
+ *
+ * Licensed under the MIT license. Please see LICENSE for more information.
+ * 
+ */
 ;
 
 // Create namespaces 
@@ -158,7 +158,20 @@ window.ionic = {
       return null
     },
 
-    getChildIndex: function(element) {
+    getChildIndex: function(element, type) {
+      if(type) {
+        var ch = element.parentNode.children;
+        var c;
+        for(var i = 0, k = 0, j = ch.length; i < j; i++) {
+          c = ch[i];
+          if(c.nodeName && c.nodeName.toLowerCase() == type) {
+            if(c == element) {
+              return k;
+            }
+            k++;
+          }
+        }
+      }
       return Array.prototype.slice.call(element.parentNode.children).indexOf(element);
     },
     swapNodes: function(src, dest) {
@@ -204,6 +217,30 @@ window.ionic = {
  */
 
 (function(ionic) {
+
+  // Custom event polyfill
+  if(!window.CustomEvent) {
+    (function() {
+      var CustomEvent;
+
+      CustomEvent = function(event, params) {
+        var evt;
+        params = params || {
+          bubbles: false,
+          cancelable: false,
+          detail: undefined
+        };
+        evt = document.createEvent("CustomEvent");
+        evt.initCustomEvent(event, params.bubbles, params.cancelable, params.detail);
+        return evt;
+      };
+
+      CustomEvent.prototype = window.Event.prototype;
+
+      window.CustomEvent = CustomEvent;
+    })();
+  }
+
   ionic.EventController = {
     VIRTUALIZED_EVENTS: ['tap', 'swipe', 'swiperight', 'swipeleft', 'drag', 'hold', 'release'],
 
@@ -249,39 +286,6 @@ window.ionic = {
       gesture.off(type, callback);
     },
 
-    // // With a click event, we need to check the target
-    // // and if it's an internal target that doesn't want
-    // // a click, cancel it
-    // handleClick: function(e) {
-    //   var target = e.target;
-
-    //   if(ionic.Gestures.HAS_TOUCHEVENTS) {
-    //     // We don't allow any clicks on mobile
-    //     e.preventDefault();
-    //     return false;
-    //   }
-
-    //   if (
-    //     !  target
-    //     || e.which > 1
-    //     || e.metaKey
-    //     || e.ctrlKey
-    //     //|| isScrolling
-    //     // || location.protocol !== target.protocol
-    //     // || location.host     !== target.host
-    //     // // Not sure abotu this one
-    //     // //|| !target.hash && /#/.test(target.href)
-    //     // || target.hash && target.href.replace(target.hash, '') === location.href.replace(location.hash, '')
-    //     //|| target.getAttribute('data-ignore') == 'push'
-    //   ) {
-    //     // Allow it
-    //     return;
-    //   }
-    //   // We need to cancel this one
-    //   e.preventDefault();
-
-    // },
-    
     handlePopState: function(event) {
     },
   };
@@ -293,10 +297,6 @@ window.ionic = {
   ionic.trigger = function() { ionic.EventController.trigger.apply(ionic.EventController.trigger, arguments); };
   ionic.onGesture = function() { return ionic.EventController.onGesture.apply(ionic.EventController.onGesture, arguments); };
   ionic.offGesture = function() { return ionic.EventController.offGesture.apply(ionic.EventController.offGesture, arguments); };
-
-  // DISABLING FOR NOW. THE TAP CODE AT THE EXT LEVEL SHOULD BE DOING THIS
-  // Set up various listeners
-  //window.addEventListener('click', ionic.EventController.handleClick);
 
 })(window.ionic);
 ;
@@ -743,7 +743,7 @@ window.ionic = {
                       }
 
                       if(this.srcEvent.preventDefault) {
-                        this.srcEvent.preventDefault();
+                        //this.srcEvent.preventDefault();
                       }
                     },
 
@@ -1799,13 +1799,14 @@ window.ionic = {
     }
   })();
 
-
   // polyfill use to simulate native "tap"
   function inputTapPolyfill(ele, e) {
     if(ele.type === "radio" || ele.type === "checkbox") {
       //ele.checked = !ele.checked;
     } else if(ele.type === "submit" || ele.type === "button") {
-      ele.click();
+      ionic.trigger('click', {
+        target: ele
+      });
     } else {
       ele.focus();
     }
@@ -1838,15 +1839,17 @@ window.ionic = {
         if(ele.control) {
           return inputTapPolyfill(ele.control, e);
         }
+      } else if( ele.tagName === "A" ) {
+        var href = ele.getAttribute('href');
+        if(href) {
+          ionic.trigger('click', {
+            target: ele
+          });
+          e.stopPropagation();
+          e.preventDefault();
+          return false;
+        }
       }
-      /* Let ng-click handle this
-      else if( ele.tagName === "A" || ele.tagName === "BUTTON" ) {
-        ele.click();
-        e.stopPropagation();
-        e.preventDefault();
-        return false;
-      }
-      */
       ele = ele.parentElement;
     }
 
@@ -1875,6 +1878,17 @@ window.ionic = {
    * Some of these are adopted from underscore.js and backbone.js, both also MIT licensed.
    */
   ionic.Utils = {
+
+    arrayMove: function (arr, old_index, new_index) {
+      if (new_index >= arr.length) {
+        var k = new_index - arr.length;
+        while ((k--) + 1) {
+          arr.push(undefined);
+        }
+      }
+      arr.splice(new_index, 0, arr.splice(old_index, 1)[0]);
+      return arr;
+    },
 
     /**
      * Return a function that will be called with the given context
@@ -2131,6 +2145,7 @@ window.ionic = {
       // Listen for drag and release events
       ionic.onGesture('drag', function(e) {
         _this._handleDrag(e);
+        e.gesture.srcEvent.preventDefault();
       }, this.el);
       ionic.onGesture('release', function(e) {
         _this._handleEndDrag(e);
@@ -3100,6 +3115,7 @@ window.ionic = {
 
   var ReorderDrag = function(opts) {
     this.dragThresholdY = opts.dragThresholdY || 0;
+    this.onReorder = opts.onReorder;
     this.el = opts.el;
   };
 
@@ -3112,6 +3128,8 @@ window.ionic = {
     // Grab the starting Y point for the item
     var offsetY = this.el.offsetTop;//parseFloat(this.el.style.webkitTransform.replace('translate3d(', '').split(',')[1]) || 0;
 
+    var startIndex = ionic.DomUtil.getChildIndex(this.el, this.el.nodeName.toLowerCase());
+
     var placeholder = this.el.cloneNode(true);
 
     placeholder.classList.add(ITEM_PLACEHOLDER_CLASS);
@@ -3120,9 +3138,9 @@ window.ionic = {
 
     this.el.classList.add(ITEM_REORDERING_CLASS);
 
-
     this._currentDrag = {
       startOffsetTop: offsetY,
+      startIndex: startIndex,
       placeholder: placeholder
     };
   };
@@ -3188,9 +3206,11 @@ window.ionic = {
     this.el.classList.remove(ITEM_REORDERING_CLASS);
     this.el.style.top = 0;
 
-    var finalPosition = ionic.DomUtil.getChildIndex(placeholder);
+    var finalPosition = ionic.DomUtil.getChildIndex(placeholder, placeholder.nodeName.toLowerCase());
     placeholder.parentNode.insertBefore(this.el, placeholder);
     placeholder.parentNode.removeChild(placeholder);
+
+    this.onReorder && this.onReorder(this.el, this._currentDrag.startIndex, finalPosition);
 
     this._currentDrag = null;
     doneCallback && doneCallback();
@@ -3207,6 +3227,7 @@ window.ionic = {
       var _this = this;
 
       opts = ionic.extend({
+        onReorder: function(el, oldIndex, newIndex) {},
         virtualRemoveThreshold: -200,
         virtualAddThreshold: 200
       }, opts);
@@ -3330,7 +3351,12 @@ window.ionic = {
         var item = this._getItem(e.target);
 
         if(item) {
-          this._dragOp = new ReorderDrag({ el: item });
+          this._dragOp = new ReorderDrag({
+            el: item,
+            onReorder: function(el, start, end) {
+              _this.onReorder && _this.onReorder(el, start, end);
+            }
+          });
           this._dragOp.start(e);
           e.preventDefault();
           return;
@@ -3697,6 +3723,7 @@ window.ionic = {
       // Listen for drag and release events
       window.ionic.onGesture('drag', function(e) {
         _this._handleDrag(e);
+        e.gesture.srcEvent.preventDefault();
       }, this.el);
       window.ionic.onGesture('release', function(e) {
         _this._handleEndDrag(e);
@@ -4043,7 +4070,7 @@ ionic.views.TabBarItem = ionic.views.View.inherit({
     }
 
     // Set the title to the text content of the tab.
-    this.title = this.el.innerText.trim();
+    this.title = this.el.textContent.trim();
 
     this._tapHandler = function(e) {
       _this.onTap && _this.onTap(e);
@@ -4587,9 +4614,9 @@ ionic.controllers.NavController = ionic.controllers.ViewController.inherit({
         this._rightShowing = false;
 
         // Push the z-index of the right menu down
-        this.right && this.right.pushDown();
+        this.right && this.right.pushDown && this.right.pushDown();
         // Bring the z-index of the left menu up
-        this.left && this.left.bringUp();
+        this.left && this.left.bringUp && this.left.bringUp();
       } else {
         this._rightShowing = true;
         this._leftShowing = false;
