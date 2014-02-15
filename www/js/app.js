@@ -1,4 +1,4 @@
-angular.module('todo', ['ionic'])
+angular.module('todo', ['ionic', 'firebase'])
 /**
  * The Projects factory handles saving and loading projects
  * from local storage, and also lets us save and load the
@@ -32,23 +32,43 @@ angular.module('todo', ['ionic'])
   }
 })
 
-.controller('TodoCtrl', function($scope, $timeout, Modal, Projects) {
-
+.controller('TodoCtrl', function($scope, $firebase, $timeout, Modal, Projects) {
+  $scope.projectsList = {};
+  $scope.user = {};
+  
+  $scope.projectsList = $firebase(new Firebase("https://cordova.firebaseio.com/projects"));
+  $scope.user = $firebase (new Firebase("https://cordova.firebaseio.com/users/John"));
+  
+  $scope.projectsList.$on("loaded", function(){
+    console.log($scope.projectsList);
+    window.projectsList = $scope.projectsList;
+  });
+  
+  $scope.projectsList.$on("loaded", function(){
+    console.log($scope.user);
+    window.user = $scope.user;
+  });
+  
   // A utility function for creating a new project
   // with the given projectTitle
   var createProject = function(projectTitle) {
-    var newProject = Projects.newProject(projectTitle);
-    $scope.projects.push(newProject);
-    Projects.save($scope.projects);
-    $scope.selectProject(newProject, $scope.projects.length-1);
+    // var newProject = Projects.newProject(projectTitle);
+    // $scope.projects.push(newProject);
+    
+    $scope.projectsList[projectTitle] = [];
+    $scope.projectsList.$save(projectTitle);
+    
+    // Projects.save($scope.projects);
+    //$scope.selectProject(newProject, $scope.projects.length-1);
+    $scope.selectProject(projectTitle);
   }
 
 
   // Load or initialize projects
-  $scope.projects = Projects.all();
+  // $scope.projects = Projects.all();
 
   // Grab the last active, or the first project
-  $scope.activeProject = $scope.projects[Projects.getLastActiveIndex()];
+  // $scope.activeProject = $scope.projects[Projects.getLastActiveIndex()];
 
   // Called to create a new project
   $scope.newProject = function() {
@@ -59,9 +79,11 @@ angular.module('todo', ['ionic'])
   };
 
   // Called to select the given project
-  $scope.selectProject = function(project, index) {
-    $scope.activeProject = project;
-    Projects.setLastActiveIndex(index);
+  $scope.selectProject = function(project) {
+    //$scope.activeProject = project;
+    //Projects.setLastActiveIndex(index);
+    $scope.user.lastproject = project;
+    
     $scope.sideMenuController.close();
   };
 
@@ -73,17 +95,19 @@ angular.module('todo', ['ionic'])
   });
 
   $scope.createTask = function(task) {
-    if(!$scope.activeProject) {
+   /* if(!$scope.activeProject) {
+      return;
+    }*/
+    
+    if(!$scope.user.lastproject) {
       return;
     }
-    $scope.activeProject.tasks.push({
-      title: task.title
-    });
+    
+    var name = $scope.user.lastproject;
+    $scope.projectsList[name].push(task.title);
+    $scope.projectsList.$save(name);
     $scope.taskModal.hide();
-
-    // Inefficient, but save all the projects
-    Projects.save($scope.projects);
-
+    
     task.title = "";
   };
 
